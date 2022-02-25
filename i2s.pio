@@ -1,0 +1,251 @@
+; i2s.pio
+;
+; Author: Daniel Collins
+; Date:   2022-02-25
+;
+; Copyright (c) 2022 Daniel Collins
+;
+; This file is part of rp2040_i2s_example.
+;
+; rp2040_i2s_example is free software: you can redistribute it and/or modify it under
+; the terms of the GNU General Public License, version 3 as published by the
+; Free Software Foundation.
+;
+; rp2040_i2s_example is distributed in the hope that it will be useful, but WITHOUT ANY
+; WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+; A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License along with
+; rp2040_i2s_example. If not, see <https://www.gnu.org/licenses/>.
+
+; An I2S bi-directional peripheral with master clock (SCK) output.
+
+.program i2s_sck
+; Transmit an I2S system / master clock.
+;
+; Usually this needs to be 256 * fs (the word clock rate).
+; (e.g. for 48kHz audio, this should be precisely 12.288000 MHz.)
+; Since all of these transmit at 1 I2S-clock per 2 sys-clock cycles,
+; you need to set the clock divider at 2x the desired rate
+; (for the 48kHz example, this should be 2 * 12,288,000 = 24.5760000 MHz).
+;
+; Use this as one state machine of the I2S PIO unit as a whole for perfect
+; synchronization, e.g.:
+;   state machine 0 = clock (divide to 48000 * 256 * 2 = 24.576000 MHz for 48kHz stereo audio)
+;   state machine 1 = out   (divide to 48000 *  64 * 2 =  6.144000 MHz for 48kHz stereo audio)
+;   state machine 2 = in    (divide to 48000 * 256 * 2 = 24.576000 MHz for 48kHz stereo audio)
+;
+; One output pin is used for the clock output.
+
+.wrap_target
+    set pins 1
+    set pins 0
+.wrap
+
+.program i2s_out_master
+; I2S audio output block. Synchronous with clock and input.
+; Must run at BCK * 2.
+;
+; This block also outputs the word clock (also called frame or LR clock) and
+; the bit clock.
+;
+; Set register x to (bit depth - 2) (e.g. for 24 bit audio, set to 22).
+; Note that if this is needed to be synchronous with the SCK module,
+; it is not possible to run 24-bit frames with an SCK of 256x fs. You must either
+; run SCK at 384x fs (if your codec permits this) or use 32-bit frames, which
+; work fine with 24-bit codecs.
+
+.side_set 2
+
+public entry_point:
+                    ;        /--- LRCLK
+                    ;        |/-- BCLK
+frameL:             ;        ||
+    set x, 30         side 0b00 ; start of Left frame
+    pull noblock      side 0b01 ; One clock after edge change with no data
+dataL:
+    out pins, 1       side 0b00
+    jmp x-- dataL     side 0b01
+
+frameR:
+    set x, 30         side 0b10
+    pull noblock      side 0b11 ; One clock after edge change with no data
+dataR:
+    out pins, 1       side 0b10
+    jmp x-- dataR     side 0b11
+
+.program i2s_bidi_slave
+; I2S audio bidirectional (input/output) block, both in slave mode.
+; Requires external BCK and LRCK, usually from the codec directly.
+; This block provides both the output and input components together,
+; so should not be used in combination with either of the other output or
+; input units on the same I2S bus.
+;
+; Input pin order: DIN, BCK, LRCK
+; Set JMP pin to LRCK.
+;
+; Clock synchronously with the system clock, or *at least* 4x the usual
+; bit clock for a given fs (e.g. for 48kHz 24-bit, clock at at least
+; (48000 * 24 * 2 (stereo)) * 4 = 9.216 MHz. Ideally 8x or more.
+
+public_entry_point:
+  wait 1 pin 2
+  wait 0 pin 2                  ; wait for LRCK to be a left frame start
+start_l:
+  wait 0 pin 1                  ;
+  pull noblock                  ;
+  push noblock                  ;
+  wait 1 pin 1                  ;
+loop_l:
+  wait 0 pin 1                  ;
+  jmp pin start_r               ;
+  out pins 1                    ;
+  wait 1 pin 1                  ;
+  in pins 1                     ;
+  jmp loop_l                    ;
+start_r:
+  wait 0 pin 1                  ;
+  pull noblock                  ;
+  push noblock                  ;
+  wait 1 pin 1                  ;
+loop_r:
+  wait 0 pin 1                  ;
+  jmp pin continue_r            ;
+  jmp start_l                   ;
+continue_r:
+  out pins 1                    ;
+  wait 1 pin 1                  ;
+  in pins 1                     ;
+  jmp loop_r                    ;
+
+; I2S Audio Input - Slave or Synchronous with Output Master
+; Inputs must be sequential in order: DIN, BCK, LRCK
+; Must run at same speed of SCK block, or at least 4x BCK.
+;
+; NOTE: Set JMP pin to LRCK pin.
+; NOTE: The very first word read is potentially corrupt, since there is a
+;       chance to start in the middle of an L frame and only read part of it.
+;       Nevertheless, the frame order should be synchronized (first word is L,
+;       second is R, etc.)
+
+.program i2s_in_slave
+
+start_sample_l:
+    wait 1 pin 1            ; DIN should be sampled on rising transition of BCK
+    in pins, 1              ; first "bit" of new frame is actually LSB of last frame, per I2S
+    push noblock            ; push however many bits we read into the FIFO
+    wait 0 pin 1            ; ignore first BCK transition after edge
+public_entry_point:
+    wait 0 pin 2            ; wait for L frame to come around before we start
+sample_l:
+    wait 1 pin 1            ; DIN should be sampled on rising transition of BCK
+    in pins, 1              ; read DIN
+    wait 0 pin 1            ; don't sample more than once per rising edge, wait for next clock
+    jmp pin start_sample_r  ; if LRCK has gone high, we're "done" with this word (1 bit left to read)
+    jmp sample_l
+start_sample_r:
+    wait 1 pin 1            ; wait for the last bit of the previous frame
+    in pins, 1              ; first "bit" of new frame is actually LSB of last frame, per I2S
+    push noblock            ; push the completed word to the FIFO
+    wait 0 pin 1            ; wait for next clock cycle
+sample_r:
+    wait 1 pin 1
+    in pins, 1
+    wait 0 pin 1
+    jmp pin sample_r        ; if LRCK is still high, we're still sampling this word
+    jmp start_sample_l      ; otherwise, start the loop over
+
+% c-sdk {
+
+// These constants are the I2S clock to pio clock ratio
+const int i2s_sck_program_pio_mult = 2;
+const int i2s_out_master_program_pio_mult = 2;
+
+/*
+ * System ClocK (SCK) is only required by some I2S peripherals.
+ * This outputs it at 1 SCK per 2 PIO clocks, so scale the dividers correctly
+ * first.
+ * NOTE: Most peripherals require that this is *perfectly* aligned in ratio,
+ *       if not phase, to the bit and word clocks of any master peripherals.
+ *       It is up to you to ensure that the divider config is set up for a
+ *       precise (not approximate) ratio between the BCK, LRCK, and SCK outputs.
+ */
+static void i2s_sck_program_init(PIO pio, uint8_t sm, uint8_t offset, uint8_t sck_pin) {
+    pio_gpio_init(pio, sck_pin);
+    pio_sm_config sm_config = i2s_sck_program_get_default_config(offset);
+    sm_config_set_set_pins(&sm_config, sck_pin, 1);
+
+    uint pin_mask = (1u << sck_pin);
+    pio_sm_set_pins_with_mask(pio, sm, 0, pin_mask);  // zero output
+    pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask);
+
+    pio_sm_init(pio, sm, offset, &sm_config);
+}
+
+static inline void i2s_out_master_program_init(PIO pio, uint8_t sm, uint8_t offset, uint8_t bit_depth, uint8_t dout_pin, uint8_t clock_pin_base) {
+    pio_gpio_init(pio, dout_pin);
+    pio_gpio_init(pio, clock_pin_base);
+    pio_gpio_init(pio, clock_pin_base + 1);
+
+    pio_sm_config sm_config = i2s_out_master_program_get_default_config(offset);
+    sm_config_set_out_pins(&sm_config, dout_pin, 1);
+    sm_config_set_sideset_pins(&sm_config, clock_pin_base);
+    sm_config_set_out_shift(&sm_config, false, false, bit_depth);
+    sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX);
+    pio_sm_init(pio, sm, offset, &sm_config);
+
+    uint32_t pin_mask = (1u << dout_pin) | (3u << clock_pin_base);
+    pio_sm_set_pins_with_mask(pio, sm, 0, pin_mask);  // zero output
+    pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask);
+}
+
+static inline void i2s_bidi_slave_program_init(PIO pio, uint8_t sm, uint8_t offset, uint8_t dout_pin, uint8_t in_pin_base) {
+    pio_gpio_init(pio, dout_pin);
+    pio_gpio_init(pio, in_pin_base);
+    pio_gpio_init(pio, in_pin_base + 1);
+    pio_gpio_init(pio, in_pin_base + 2);
+
+    pio_sm_config sm_config = i2s_bidi_slave_program_get_default_config(offset);
+    sm_config_set_out_pins(&sm_config, dout_pin, 1);
+    sm_config_set_in_pins(&sm_config, in_pin_base);
+    sm_config_set_jmp_pin(&sm_config, in_pin_base + 2);
+    sm_config_set_out_shift(&sm_config, false, false, 0);
+    sm_config_set_in_shift(&sm_config, false, false, 0);
+    pio_sm_init(pio, sm, offset, &sm_config);
+
+    // Setup output pins
+    uint32_t pin_mask = (1u << dout_pin);
+    pio_sm_set_pins_with_mask(pio, sm, 0, pin_mask);  // zero output
+    pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask);
+
+    // Setup input pins
+    pin_mask = (7u << in_pin_base);  // Three input pins
+    pio_sm_set_pindirs_with_mask(pio, sm, 0, pin_mask);
+}
+
+/*
+ *  Designed to be used with output master module, requiring overlapping pins:
+ *    din_pin_base + 0 = input pin
+ *    din_pin_base + 1 = out_master clock_pin_base
+ *    din_pin_base + 2 = out_master clock_pin_base + 1
+ *
+ *  Intended to be run at SCK rate (4x BCK), so clock same as SCK module if using
+ *  it, or 4x the BCK frequency (BCK is 64x fs, so 256x fs).
+ */
+static inline void i2s_in_slave_program_init(PIO pio, uint8_t sm, uint8_t offset, uint8_t din_pin_base) {
+    pio_gpio_init(pio, din_pin_base);
+    gpio_set_pulls(din_pin_base, false, false);
+    gpio_set_dir(din_pin_base, GPIO_IN);
+
+    pio_sm_config sm_config = i2s_in_slave_program_get_default_config(offset);
+    sm_config_set_in_pins(&sm_config, din_pin_base);
+    sm_config_set_in_shift(&sm_config, false, false, 0);
+    sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_RX);
+    sm_config_set_jmp_pin(&sm_config, din_pin_base + 2);
+    pio_sm_init(pio, sm, offset, &sm_config);
+
+    uint32_t pin_mask = (7u << din_pin_base);  // Three input pins
+    pio_sm_set_pindirs_with_mask(pio, sm, 0, pin_mask);
+}
+
+%}
