@@ -16,7 +16,8 @@ common I2S tasks. They comprise:
 - i2s_bidi_slave: A bi-directional (in and out) codec interface in slave mode (requires externally generated BCK and
   LRCK, usually from the codec).
 
-There is not a standalone output slave module, but one can easily be designed from the above options if needed.
+There is not a standalone output slave module nor input master, but one can easily be designed from the above options if
+needed.
 
 ## API
 
@@ -167,7 +168,7 @@ intentional.
 
 The full text of the license should be found in LICENSE.txt, included as part of this repository.
 
-This library and all accompanying code, examples, information and documentation is Copyright (C) 2019-2020 Daniel
+This library and all accompanying code, examples, information and documentation is Copyright (C) 2022 Daniel
 Collins
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
