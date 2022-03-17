@@ -72,7 +72,7 @@ The constant multiple of 2 in the bit clock is because the I2S standard inherent
 audio frames into left and right words via the LRCK.
 
 One of either Data In or Data Out are, of course, required for this to be useful, but not all peripherals have both -
-you might be talking only to a DAC or only to an ADC, not a coded (which is just a DAC and an ADC in the same package,
+you might be talking only to a DAC or only to an ADC, not a codec (which is just a DAC and an ADC in the same package,
 possibly sharing clocks, possibly not).
 
 Additionally, not all peripherals require master clock, some have a PLL which can generate it from the bit clock, in
