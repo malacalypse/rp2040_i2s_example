@@ -47,7 +47,7 @@ const uint LED_PIN = PICO_DEFAULT_LED_PIN;
 
 static __attribute__((aligned(8))) pio_i2s i2s;
 
-static void process_audio(const uint32_t* input, uint32_t* output, size_t num_frames) {
+static void process_audio(const int32_t* input, int32_t* output, size_t num_frames) {
     // Just copy the input to the output
     for (size_t i = 0; i < num_frames * 2; i++) {
         output[i] = input[i];
@@ -59,7 +59,7 @@ static void dma_i2s_in_handler(void) {
      * DMA is currently reading from, we can identify which buffer it has just
      * finished reading (the completion of which has triggered this interrupt).
      */
-    if (*(uint32_t**)dma_hw->ch[i2s.dma_ch_in_ctrl].read_addr == i2s.input_buffer) {
+    if (*(int32_t**)dma_hw->ch[i2s.dma_ch_in_ctrl].read_addr == i2s.input_buffer) {
         // It is inputting to the second buffer so we can overwrite the first
         process_audio(i2s.input_buffer, i2s.output_buffer, AUDIO_BUFFER_FRAMES);
     } else {

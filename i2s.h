@@ -63,10 +63,10 @@ typedef struct pio_i2s {
     uint       dma_ch_in_data;
     uint       dma_ch_out_ctrl;
     uint       dma_ch_out_data;
-    uint32_t*  in_ctrl_blocks[2];  // Control blocks MUST have 8-byte alignment.
-    uint32_t*  out_ctrl_blocks[2];
-    uint32_t   input_buffer[STEREO_BUFFER_SIZE * 2];
-    uint32_t   output_buffer[STEREO_BUFFER_SIZE * 2];
+    int32_t*   in_ctrl_blocks[2];  // Control blocks MUST have 8-byte alignment.
+    int32_t*   out_ctrl_blocks[2];
+    int32_t    input_buffer[STEREO_BUFFER_SIZE * 2];
+    int32_t    output_buffer[STEREO_BUFFER_SIZE * 2];
     i2s_config config;
 } pio_i2s;
 
