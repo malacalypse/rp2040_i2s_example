@@ -88,35 +88,37 @@ dataR:
 ; bit clock for a given fs (e.g. for 48kHz 24-bit, clock at at least
 ; (48000 * 24 * 2 (stereo)) * 4 = 9.216 MHz. Ideally 8x or more.
 
-public_entry_point:
-  wait 1 pin 2
-  wait 0 pin 2                  ; wait for LRCK to be a left frame start
 start_l:
-  wait 0 pin 1                  ;
+  wait 1 pin 1                  ; DIN should be sampled on rising transition of BCK
+  in pins, 1                    ; first "bit" of new frame is actually LSB of last frame, per I2S 
   pull noblock                  ;
   push noblock                  ;
-  wait 1 pin 1                  ;
+  wait 0 pin 1                  ; ignore first BCK transition after edge
+public_entry_point:
+  wait 0 pin 2                  ; wait for L frame to come around before we start
+  out pins 1                    ; update DOUT on falling BCK edge
 loop_l:
-  wait 0 pin 1                  ;
-  jmp pin start_r               ;
-  out pins 1                    ;
-  wait 1 pin 1                  ;
-  in pins 1                     ;
+  wait 1 pin 1                  ; DIN should be sampled on rising transition of BCK
+  in pins, 1                    ; read DIN
+  wait 0 pin 1                  ; DOUT should be updated on falling transition of BCK
+  out pins 1                    ; update DOUT
+  jmp pin start_r               ; if LRCK has gone high, we're "done" with this word (1 bit left to read)
   jmp loop_l                    ;
 start_r:
-  wait 0 pin 1                  ;
-  pull noblock                  ;
-  push noblock                  ;
-  wait 1 pin 1                  ;
+  wait 1 pin 1                  ; wait for the last bit of the previous frame
+  in pins, 1                    ; first "bit" of new frame is actually LSB of last frame, per I2S
+  pull noblock                  ; pull next output word from FIFO
+  push noblock                  ; push the completed word to the FIFO
+  wait 0 pin 1                  ; wait for next clock cycle
+  out pins 1                    ; update DOUT on falling edge
 loop_r:
-  wait 0 pin 1                  ;
-  jmp pin continue_r            ;
-  jmp start_l                   ;
-continue_r:
-  out pins 1                    ;
   wait 1 pin 1                  ;
   in pins 1                     ;
-  jmp loop_r                    ;
+  wait 0 pin 1                  ;
+  out pins 1                    ; update DOUT
+  jmp pin loop_r                ; if LRCK is still high, we're still sampling this word
+  jmp start_l                   ; otherwise, start the loop over
+
 
 ; I2S Audio Input - Slave or Synchronous with Output Master
 ; Inputs must be sequential in order: DIN, BCK, LRCK
