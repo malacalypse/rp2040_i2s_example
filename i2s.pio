@@ -117,7 +117,7 @@ loop_r:
   wait 0 pin 1                  ;
   out pins 1                    ; update DOUT
   jmp pin loop_r                ; if LRCK is still high, we're still sampling this word
-  jmp start_l                   ; otherwise, start the loop over
+                                ; implicit jmp to start_l: otherwise, start the loop over
 
 
 ; I2S Audio Input - Slave or Synchronous with Output Master
@@ -155,7 +155,7 @@ sample_r:
     in pins, 1
     wait 0 pin 1
     jmp pin sample_r        ; if LRCK is still high, we're still sampling this word
-    jmp start_sample_l      ; otherwise, start the loop over
+                            ; implicit jmp to start_sample_l: otherwise, start the loop over
 
 % c-sdk {
 
