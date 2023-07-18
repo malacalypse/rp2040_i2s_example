@@ -154,7 +154,7 @@ static void i2s_slave_program_init(PIO pio, const i2s_config* config, pio_i2s* i
         // SCK block
         i2s->sm_sck = pio_claim_unused_sm(pio, true);
         i2s->sm_mask |= (1u << i2s->sm_sck);
-        offset = pio_add_program(pio0, &i2s_sck_program);
+        offset = pio_add_program(pio, &i2s_sck_program);
         i2s_sck_program_init(pio, i2s->sm_sck, offset, config->sck_pin);
         pio_sm_set_clkdiv_int_frac(pio, i2s->sm_sck, clocks.sck_d, clocks.sck_f);
     }
@@ -163,7 +163,7 @@ static void i2s_slave_program_init(PIO pio, const i2s_config* config, pio_i2s* i
     i2s->sm_din  = pio_claim_unused_sm(pio, true);
     i2s->sm_dout = i2s->sm_din;
     i2s->sm_mask |= (1u << i2s->sm_din);
-    offset = pio_add_program(pio0, &i2s_bidi_slave_program);
+    offset = pio_add_program(pio, &i2s_bidi_slave_program);
     i2s_bidi_slave_program_init(pio, i2s->sm_din, offset, config->dout_pin, config->din_pin);
     pio_sm_set_clkdiv_int_frac(pio, i2s->sm_din, clocks.sck_d, clocks.sck_f);
 }
@@ -194,7 +194,7 @@ static void i2s_sync_program_init(PIO pio, const i2s_config* config, pio_i2s* i2
         // SCK block
         i2s->sm_sck = pio_claim_unused_sm(pio, true);
         i2s->sm_mask |= (1u << i2s->sm_sck);
-        offset = pio_add_program(pio0, &i2s_sck_program);
+        offset = pio_add_program(pio, &i2s_sck_program);
         i2s_sck_program_init(pio, i2s->sm_sck, offset, config->sck_pin);
         pio_sm_set_clkdiv_int_frac(pio, i2s->sm_sck, clocks.sck_d, clocks.sck_f);
     }
@@ -202,14 +202,14 @@ static void i2s_sync_program_init(PIO pio, const i2s_config* config, pio_i2s* i2
     // In block, clocked with SCK
     i2s->sm_din = pio_claim_unused_sm(pio, true);
     i2s->sm_mask |= (1u << i2s->sm_din);
-    offset = pio_add_program(pio0, &i2s_in_slave_program);
+    offset = pio_add_program(pio, &i2s_in_slave_program);
     i2s_in_slave_program_init(pio, i2s->sm_din, offset, config->din_pin);
     pio_sm_set_clkdiv_int_frac(pio, i2s->sm_din, clocks.sck_d, clocks.sck_f);
 
     // Out block, clocked with BCK
     i2s->sm_dout = pio_claim_unused_sm(pio, true);
     i2s->sm_mask |= (1u << i2s->sm_dout);
-    offset = pio_add_program(pio0, &i2s_out_master_program);
+    offset = pio_add_program(pio, &i2s_out_master_program);
     i2s_out_master_program_init(pio, i2s->sm_dout, offset, config->bit_depth, config->dout_pin, config->clock_pin_base);
     pio_sm_set_clkdiv_int_frac(pio, i2s->sm_dout, clocks.bck_d, clocks.bck_f);
 }
