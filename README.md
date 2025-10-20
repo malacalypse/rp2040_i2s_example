@@ -3,6 +3,13 @@
 Raspberry Pi Pico full-featured I2S PIO with system clock and bi-directional, double-buffered DMA support. Intended to
 be used with all common codecs, but modular enough to support unidirectional DAC or ADC implementations as well.
 
+# NOTE: This software is un-maintained!
+
+This is mature code at this point and I no longer have the time or interest in continuing to monitor it for issues or 
+integration requests. I have decided to archive this project as legacy code. I will leave it available for others to 
+make use of, play with, and otherwise enjoy, subject to the GPL license included. However, I will no longer be 
+maintaining or supporting it in any way. It is what it is, now.
+
 # Included PIO Programs
 
 This package includes multiple PIO programs which are intended to be used either alone or in combinations to accomplish
